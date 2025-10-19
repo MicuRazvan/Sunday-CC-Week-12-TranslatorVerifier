@@ -1,0 +1,266 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Translation Verifier</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Roboto:wght@400;500&display=swap');
+
+        html {
+            height: 100%;
+        }
+
+        body {
+            font-family: 'Roboto', sans-serif;
+            margin: 0;
+            height: 100%;
+            background-image: url('bg/bg.jpg');
+            background-size: cover;
+            background-position: center;
+            background-repeat: no-repeat;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            color: #333;
+        }
+
+        .container {
+            background-color: rgba(255, 255, 255, 0.95);
+            padding: 40px;
+            border-radius: 12px;
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1);
+            width: 90%;
+            max-width: 800px;
+            text-align: center;
+        }
+
+        h1 {
+            color: #1a1a1a;
+            margin-bottom: 30px;
+        }
+
+        textarea, select {
+            width: 100%;
+            padding: 12px;
+            margin-bottom: 15px;
+            border: 1px solid #ccc;
+            border-radius: 6px;
+            font-size: 16px;
+            box-sizing: border-box;
+            background-color: #fff;
+        }
+
+        button {
+            background-color: #007bff;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 6px;
+            font-size: 16px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: background-color 0.3s ease, transform 0.1s ease;
+            margin: 5px;
+        }
+
+        button:hover {
+            background-color: #0056b3;
+        }
+
+        button:active {
+            transform: scale(0.98);
+        }
+
+        #translations {
+            margin-top: 20px;
+            max-height: 200px;
+            overflow-y: auto;
+            padding-right: 10px;
+        }
+
+        .translation-entry {
+            margin-bottom: 15px;
+        }
+
+        .translation-row {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .translation-row select {
+            flex: 1 1 180px;
+            margin-bottom: 0;
+        }
+
+        .translation-row textarea {
+            flex: 2 1 300px;
+            margin-bottom: 0;
+        }
+
+        .delete-btn {
+            background-color: #dc3545;
+            color: white;
+            border: none;
+            border-radius: 50%;
+            width: 35px;
+            height: 35px;
+            font-size: 16px;
+            cursor: pointer;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 0;
+            flex-shrink: 0;
+        }
+
+        .delete-btn:hover {
+            background-color: #c82333;
+        }
+
+        .result-container {
+            text-align: left;
+            padding-left: 45px;
+            font-size: 14px;
+            margin-top: 5px;
+        }
+
+        .correct { color: #28a745; font-weight: bold; }
+        .incorrect { color: #dc3545; }
+        .error-field { border: 2px solid #dc3545 !important; }
+
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h1>Translation Verifier</h1>
+    <textarea id="originalText" placeholder="Enter original phrase..." spellcheck="false"></textarea>
+    <div>
+        <button onclick="addTranslationField()">Add Translation</button>
+        <button onclick="verifyTranslations()">Verify</button>
+    </div>
+    <div id="translations"></div>
+</div>
+
+<script>
+    let languages = [];
+
+    document.addEventListener('DOMContentLoaded', function() {
+        fetch('/api/languages')
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error('Network response was not ok');
+                }
+                return response.json();
+            })
+            .then(data => {
+                languages = data.sort((a, b) => a.name.localeCompare(b.name));
+            })
+            .catch(error => {
+                console.error('Failed to fetch languages:', error);
+                alert('Could not load languages from the server.');
+            });
+    });
+
+    function addTranslationField() {
+        const translationsContainer = document.getElementById('translations');
+        const newEntry = document.createElement('div');
+        newEntry.className = 'translation-entry';
+
+        newEntry.innerHTML = `
+            <div class="translation-row">
+                <button class="delete-btn" onclick="deleteTranslationRow(this)">X</button>
+                <select class="language">
+                    <option value="" disabled selected>-- Select a language --</option>
+                    ${languages.map(lang => `<option value="${lang.language}">${lang.name}</option>`).join('')}
+                </select>
+                <textarea class="translation" placeholder="Enter your translation" spellcheck="false"></textarea>
+            </div>
+            <div class="result-container">
+                <span class="result"></span>
+            </div>
+        `;
+        translationsContainer.appendChild(newEntry);
+    }
+
+    function deleteTranslationRow(button) {
+        button.closest('.translation-entry').remove();
+    }
+
+    function verifyTranslations() {
+        let isValid = true;
+        document.querySelectorAll('.error-field').forEach(el => el.classList.remove('error-field'));
+        document.querySelectorAll('.result').forEach(el => el.textContent = ''); // Clear previous results
+
+        const originalTextElement = document.getElementById('originalText');
+        if (originalTextElement.value.trim() === '') {
+            originalTextElement.classList.add('error-field');
+            isValid = false;
+        }
+
+        const translationRows = document.querySelectorAll('.translation-row');
+        if (translationRows.length === 0) {
+            alert('Please add at least one translation to verify.');
+            return;
+        }
+
+        translationRows.forEach(row => {
+            const langElement = row.querySelector('.language');
+            const translationElement = row.querySelector('.translation');
+            if (langElement.value === '') {
+                langElement.classList.add('error-field');
+                isValid = false;
+            }
+            if (translationElement.value.trim() === '') {
+                translationElement.classList.add('error-field');
+                isValid = false;
+            }
+        });
+
+        if (!isValid) {
+            alert('Please fill in all highlighted fields before verifying.');
+            return;
+        }
+
+        const translationsPayload = [];
+        translationRows.forEach(row => {
+            translationsPayload.push({
+                lang: row.querySelector('.language').value,
+                text: row.querySelector('.translation').value
+            });
+        });
+
+        const requestBody = {
+            originalText: originalTextElement.value,
+            translations: translationsPayload
+        };
+
+        fetch('/verify', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(requestBody)
+        })
+        .then(response => response.json())
+        .then(results => {
+            results.forEach(result => {
+                const matchingRow = Array.from(translationRows).find(row => row.querySelector('.language').value === result.lang);
+                if (matchingRow) {
+                    const resultSpan = matchingRow.closest('.translation-entry').querySelector('.result');
+                    if (result.correct) {
+                        resultSpan.className = 'result correct';
+                        resultSpan.textContent = '✔ Correct';
+                    } else {
+                        resultSpan.className = 'result incorrect';
+                        resultSpan.textContent = `✖ Correct: "${result.correctedText}"`;
+                    }
+                }
+            });
+        })
+        .catch(error => console.error('Error verifying translations:', error));
+    }
+</script>
+
+</body>
+</html>
